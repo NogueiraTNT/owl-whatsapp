@@ -1,33 +1,78 @@
 # Dockerfile
-FROM node:20-bullseye
+FROM node:18-bullseye-slim
 
-# Pacotes que o Chromium precisa
+# Instalar dependências do sistema necessárias para o Puppeteer
 RUN apt-get update && apt-get install -y \
-  chromium \
+  wget \
+  gnupg \
   ca-certificates \
-  fonts-liberation \
-  libnss3 \
-  libatk1.0-0 \
-  libatk-bridge2.0-0 \
-  libcups2 \
-  libxcomposite1 \
-  libxdamage1 \
-  libxfixes3 \
-  libxrandr2 \
-  libgbm1 \
-  libasound2 \
-  libpangocairo-1.0-0 \
-  libpango-1.0-0 \
-  libcairo2 \
-  libatspi2.0-0 \
-  libx11-xcb1 \
-  libxshmfence1 \
+  procps \
+  libxss1 \
+  && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+  && sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' \
+  && apt-get update \
+  && apt-get install -y google-chrome-stable fonts-ipafont-gothic fonts-wqy-zenhei fonts-thai-tlwg fonts-kacst fonts-freefont-ttf libxss1 \
   && rm -rf /var/lib/apt/lists/*
 
-# Não baixar o Chromium do Puppeteer (vamos usar o do sistema)
+# Instalar dependências adicionais necessárias
+RUN apt-get update && apt-get install -y \
+  libgconf-2-4 \
+  libgobject-2.0-0 \
+  libgconf2-4 \
+  libxrandr2 \
+  libasound2 \
+  libpangocairo-1.0-0 \
+  libatk1.0-0 \
+  libcairo-gobject2 \
+  libgtk-3-0 \
+  libgdk-pixbuf2.0-0 \
+  libxcomposite1 \
+  libxcursor1 \
+  libxdamage1 \
+  libxext6 \
+  libxfixes3 \
+  libxi6 \
+  libxrender1 \
+  libxtst6 \
+  libglib2.0-0 \
+  libnss3 \
+  libxss1 \
+  libgconf-2-4 \
+  libxrandr2 \
+  libasound2 \
+  libpangocairo-1.0-0 \
+  libatk1.0-0 \
+  libcairo-gobject2 \
+  libgtk-3-0 \
+  libgdk-pixbuf2.0-0 \
+  libxcomposite1 \
+  libxcursor1 \
+  libxdamage1 \
+  libxext6 \
+  libxfixes3 \
+  libxi6 \
+  libxrender1 \
+  libxtst6 \
+  libglib2.0-0 \
+  libnss3 \
+  libxss1 \
+  fonts-liberation \
+  libappindicator3-1 \
+  libasound2 \
+  libatk-bridge2.0-0 \
+  libdrm2 \
+  libxcomposite1 \
+  libxdamage1 \
+  libxrandr2 \
+  libgbm1 \
+  libxss1 \
+  libgconf-2-4 \
+  && rm -rf /var/lib/apt/lists/*
+
+# Configurações do Puppeteer para usar o Chrome instalado
 ENV PUPPETEER_SKIP_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-ENV CHROMIUM_PATH=/usr/bin/chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+ENV CHROME_BIN=/usr/bin/google-chrome-stable
 
 WORKDIR /app
 COPY package*.json ./
