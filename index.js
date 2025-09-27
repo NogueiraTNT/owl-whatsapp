@@ -26,7 +26,7 @@ const initializeWhatsApp = () => {
   client = new Client({
     authStrategy: new LocalAuth({
       clientId: "cortezapp-whatsapp",
-      dataPath: "./.wwebjs_auth",
+      dataPath: "app/.wwebjs_auth",
     }),
     puppeteer: {
       headless: true,
@@ -181,24 +181,20 @@ app.post("/send", async (req, res) => {
     const { to, text } = req.body;
 
     if (!to || !text) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: 'Parâmetros "to" e "text" são obrigatórios',
-        });
+      return res.status(400).json({
+        success: false,
+        error: 'Parâmetros "to" e "text" são obrigatórios',
+      });
     }
     if (!isReady) {
-      return res
-        .status(503)
-        .json({
-          success: false,
-          error: "WhatsApp não está pronto. Verifique /status",
-        });
+      return res.status(503).json({
+        success: false,
+        error: "WhatsApp não está pronto. Verifique /status",
+      });
     }
 
     // 1) Normaliza e valida número
-    const digits = normalizeDigits(to); // ex.: "+55 85 99872-5063" -> "5585998725063"
+    const digits = normalizeDigits(to);
     if (digits.length < 10) {
       return res.status(400).json({ success: false, error: "Número inválido" });
     }
