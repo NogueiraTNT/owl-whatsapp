@@ -8,6 +8,26 @@ require("dotenv").config();
 const app = express();
 const PORT = process.env.PORT || 3003;
 
+// URL base para produção
+const getBaseUrl = () => {
+  if (process.env.RAILWAY_PRIVATE_DOMAIN) {
+    return `https://${process.env.RAILWAY_PRIVATE_DOMAIN}`;
+  }
+  if (process.env.RAILWAY_STATIC_URL) {
+    return process.env.RAILWAY_STATIC_URL;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  if (process.env.HEROKU_APP_NAME) {
+    return `https://${process.env.HEROKU_APP_NAME}.herokuapp.com`;
+  }
+  // Fallback para desenvolvimento local
+  return `http://localhost:${PORT}`;
+};
+
+const BASE_URL = getBaseUrl();
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -83,7 +103,7 @@ const initializeWhatsApp = () => {
     try {
       qrcodeTerminal.generate(qr, { small: true }); // console
       qrCode = await qrcode.toDataURL(qr); // base64 p/ /qr
-      console.log(`🌐 QR pronto em: http://localhost:${PORT}/qr`);
+      console.log(`🌐 QR pronto em: ${BASE_URL}/qr`);
     } catch (err) {
       console.error("❌ Erro ao gerar QR Code:", err);
     }
@@ -283,7 +303,7 @@ Se você recebeu esta mensagem, a integração está OK. ✅
 — owl-whatsapp v1.0.1`;
 
     // Chama a própria rota /send (poderia chamar client direto também)
-    const r = await fetch(`http://localhost:${PORT}/send`, {
+    const r = await fetch(`${BASE_URL}/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ to, text: testMessage }),
@@ -310,8 +330,9 @@ app.use("*", (req, res) => {
 // Inicializar servidor
 app.listen(PORT, () => {
   console.log(`🚀 Servidor WhatsApp rodando na porta ${PORT}`);
-  console.log(`🔗 QR:     http://localhost:${PORT}/qr`);
-  console.log(`📊 Status: http://localhost:${PORT}/status`);
+  console.log(`🔗 QR:     ${BASE_URL}/qr`);
+  console.log(`📊 Status: ${BASE_URL}/status`);
+  console.log(`🌐 Base URL: ${BASE_URL}`);
   initializeWhatsApp();
 });
 
