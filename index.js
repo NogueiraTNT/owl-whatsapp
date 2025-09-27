@@ -42,86 +42,74 @@ const initializeWhatsApp = () => {
         "--disable-features=VizDisplayCompositor",
       ],
     },
+    // Dica: use 'latest' para evitar quebrar com versão antiga.
     webVersionCache: {
       type: "remote",
       remotePath:
-        "https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html",
+        "https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/latest.html",
     },
   });
 
   // Event: QR Code gerado
   client.on("qr", async (qr) => {
     console.log("📱 QR Code gerado!");
-    console.log("🔗 Acesse: http://localhost:" + PORT + "/qr");
-    console.log("📱 Ou escaneie o QR Code abaixo:");
-    console.log("=".repeat(50));
-
     try {
-      // Gerar QR Code para console
-      qrcodeTerminal.generate(qr, { small: true });
-
-      // Gerar QR Code para web
-      qrCode = await qrcode.toDataURL(qr);
-      console.log("=".repeat(50));
-      console.log("✅ QR Code convertido para base64");
-      console.log(
-        "🌐 QR Code também disponível em: http://localhost:" + PORT + "/qr"
-      );
+      qrcodeTerminal.generate(qr, { small: true }); // console
+      qrCode = await qrcode.toDataURL(qr); // base64 p/ /qr
+      console.log(`🌐 QR pronto em: http://localhost:${PORT}/qr`);
     } catch (err) {
       console.error("❌ Erro ao gerar QR Code:", err);
     }
   });
 
-  // Event: Cliente autenticado
   client.on("authenticated", () => {
     console.log("🔐 WhatsApp autenticado com sucesso!");
   });
 
-  // Event: Cliente pronto
   client.on("ready", () => {
     isReady = true;
     qrCode = null;
     clientInfo = client.info;
     console.log("✅ WhatsApp está pronto!");
-    console.log(`📱 Número: ${clientInfo?.wid?.user}`);
+    console.log(`📱 Número: ${clientInfo?.wid?._serialized} (me)`);
     console.log(`👤 Nome: ${clientInfo?.pushname}`);
   });
 
-  // Event: Falha na autenticação
   client.on("auth_failure", (msg) => {
     console.error("❌ Falha na autenticação:", msg);
     isReady = false;
   });
 
-  // Event: Desconectado
   client.on("disconnected", (reason) => {
     console.log("🔌 WhatsApp desconectado:", reason);
     isReady = false;
     clientInfo = null;
+    // Opcional: reinitialize
+    // setTimeout(initializeWhatsApp, 5000)
   });
 
-  // Event: Mensagem recebida
   client.on("message", (message) => {
     console.log("📨 Mensagem recebida:", {
       from: message.from,
       body:
-        message.body.substring(0, 50) + (message.body.length > 50 ? "..." : ""),
-      timestamp: new Date().toLocaleString("pt-BR"),
+        (message.body || "").substring(0, 80) +
+        ((message.body || "").length > 80 ? "..." : ""),
+      ts: new Date().toLocaleString("pt-BR"),
     });
   });
 
-  // Inicializar cliente
   client.initialize();
 };
 
-// Rotas da API
+// Helpers
+const normalizeDigits = (input) => input.replace(/[^\d]/g, ""); // só dígitos
 
-// Rota principal
+// Rotas da API
 app.get("/", (req, res) => {
   res.json({
     message: "Servidor WhatsApp CorteZapp",
     status: isReady ? "ready" : "initializing",
-    version: "1.0.0",
+    version: "1.0.1",
     endpoints: {
       status: "/status",
       qr: "/qr",
@@ -131,56 +119,52 @@ app.get("/", (req, res) => {
   });
 });
 
-// Status do WhatsApp
 app.get("/status", (req, res) => {
   res.json({
     ready: isReady,
     authenticated: !!clientInfo,
+    me: clientInfo?.wid?._serialized || null,
     phone: clientInfo?.wid?.user || null,
     name: clientInfo?.pushname || null,
     timestamp: new Date().toISOString(),
   });
 });
 
-// QR Code para autenticação
 app.get("/qr", (req, res) => {
   if (isReady) {
-    return res.json({
-      success: true,
-      message: "WhatsApp já está conectado",
-      ready: true,
-      phone: clientInfo?.wid?.user,
-    });
+    return res.send(`
+      <html><body style="font-family:sans-serif">
+        <h3>✅ WhatsApp já está conectado</h3>
+        <p>Número: ${clientInfo?.wid?.user || "-"}</p>
+      </body></html>
+    `);
   }
-
   if (!qrCode) {
-    return res.json({
-      success: false,
-      message: "QR Code não disponível. Aguarde a inicialização.",
-      ready: false,
-    });
+    return res.send(`
+      <html><body style="font-family:sans-serif">
+        <h3>QR Code não disponível. Aguarde a inicialização.</h3>
+      </body></html>
+    `);
   }
-
-  res.json({
-    success: true,
-    qrCode: qrCode,
-    ready: false,
-    message: "Escaneie o QR Code com seu WhatsApp",
-  });
+  res.send(`
+    <html><body style="display:grid;place-items:center;height:100vh;font-family:sans-serif">
+      <div>
+        <h3>Escaneie o QR no WhatsApp</h3>
+        <img src="${qrCode}" style="width:300px;height:300px"/>
+        <p>WhatsApp > Dispositivos conectados > Conectar</p>
+      </div>
+    </body></html>
+  `);
 });
 
-// Informações do cliente
 app.get("/info", (req, res) => {
   if (!isReady) {
-    return res.json({
-      success: false,
-      message: "WhatsApp não está pronto",
-    });
+    return res.json({ success: false, message: "WhatsApp não está pronto" });
   }
-
   res.json({
     success: true,
     info: {
+      me: clientInfo?.wid?._serialized,
       phone: clientInfo?.wid?.user,
       name: clientInfo?.pushname,
       platform: clientInfo?.platform,
@@ -191,64 +175,72 @@ app.get("/info", (req, res) => {
   });
 });
 
-// Enviar mensagem
+// Enviar mensagem (corrigido)
 app.post("/send", async (req, res) => {
   try {
-    const { to, text, type = "text" } = req.body;
+    const { to, text } = req.body;
 
-    // Validações
     if (!to || !text) {
-      return res.status(400).json({
-        success: false,
-        error: 'Parâmetros "to" e "text" são obrigatórios',
-      });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          error: 'Parâmetros "to" e "text" são obrigatórios',
+        });
     }
-
     if (!isReady) {
-      return res.status(400).json({
-        success: false,
-        error: "WhatsApp não está pronto. Verifique o status em /status",
-      });
+      return res
+        .status(503)
+        .json({
+          success: false,
+          error: "WhatsApp não está pronto. Verifique /status",
+        });
     }
 
-    // Formatar número
-    let formattedNumber = to.replace(/[^\d]/g, "");
-    if (!formattedNumber.startsWith("55")) {
-      formattedNumber = "55" + formattedNumber;
-    }
-    const chatId = formattedNumber + "@c.us";
-
-    // Verificar se o número existe
-    const isRegistered = await client.isRegisteredUser(chatId);
-    if (!isRegistered) {
-      return res.status(400).json({
-        success: false,
-        error: "Número não está registrado no WhatsApp",
-      });
+    // 1) Normaliza e valida número
+    const digits = normalizeDigits(to); // ex.: "+55 85 99872-5063" -> "5585998725063"
+    if (digits.length < 10) {
+      return res.status(400).json({ success: false, error: "Número inválido" });
     }
 
-    // Enviar mensagem
-    const message = await client.sendMessage(chatId, text);
+    // 2) Descobre o JID correto via getNumberId (evita erro de domínio)
+    const numberId = await client.getNumberId(digits);
+    if (!numberId) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Esse número não tem WhatsApp" });
+    }
+    const jid = numberId._serialized; // já vem como 55...@c.us
+
+    // 3) Evita mandar para si mesmo (pode não entregar)
+    const me = clientInfo?.wid?._serialized;
+    if (jid === me) {
+      console.warn(
+        "[WARN] Tentando enviar para o próprio número. Teste com outro número para validar entrega."
+      );
+    }
+
+    // 4) Envia
+    const message = await client.sendMessage(jid, text);
 
     console.log("📤 Mensagem enviada:", {
-      to: chatId,
-      messageId: message.id._serialized,
-      timestamp: new Date().toISOString(),
+      to: jid,
+      id: message.id._serialized,
+      ts: new Date().toISOString(),
     });
 
     res.json({
       success: true,
       messageId: message.id._serialized,
-      to: chatId,
-      text: text,
+      to: jid,
+      text,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error("❌ Erro ao enviar mensagem:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res
+      .status(500)
+      .json({ success: false, error: error.message || "Erro desconhecido" });
   }
 });
 
@@ -256,89 +248,58 @@ app.post("/send", async (req, res) => {
 app.post("/send-test", async (req, res) => {
   try {
     const { to } = req.body;
-
-    if (!to) {
-      return res.status(400).json({
-        success: false,
-        error: 'Parâmetro "to" é obrigatório',
-      });
-    }
+    if (!to)
+      return res
+        .status(400)
+        .json({ success: false, error: 'Parâmetro "to" é obrigatório' });
 
     const testMessage = `🧪 *CorteZapp - Teste de Conexão*
-
 Servidor WhatsApp funcionando!
-📅 Data: ${new Date().toLocaleString("pt-BR")}
+📅 ${new Date().toLocaleString("pt-BR")}
+Se você recebeu esta mensagem, a integração está OK. ✅
+— owl-whatsapp v1.0.1`;
 
-Esta é uma mensagem de teste do sistema de notificações.
-
-Se você recebeu esta mensagem, a integração está funcionando perfeitamente! ✅
-
----
-Servidor: owl-whatsapp v1.0.0`;
-
-    const result = await fetch(`http://localhost:${PORT}/send`, {
+    // Chama a própria rota /send (poderia chamar client direto também)
+    const r = await fetch(`http://localhost:${PORT}/send`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        to: to,
-        text: testMessage,
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to, text: testMessage }),
     });
-
-    const data = await result.json();
-    res.json(data);
+    const data = await r.json();
+    res.status(r.status).json(data);
   } catch (error) {
     console.error("❌ Erro no teste:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // Middleware de erro
 app.use((err, req, res, next) => {
   console.error("❌ Erro no servidor:", err);
-  res.status(500).json({
-    success: false,
-    error: "Erro interno do servidor",
-  });
+  res.status(500).json({ success: false, error: "Erro interno do servidor" });
 });
 
-// Rota 404
+// 404
 app.use("*", (req, res) => {
-  res.status(404).json({
-    success: false,
-    error: "Rota não encontrada",
-  });
+  res.status(404).json({ success: false, error: "Rota não encontrada" });
 });
 
 // Inicializar servidor
 app.listen(PORT, () => {
   console.log(`🚀 Servidor WhatsApp rodando na porta ${PORT}`);
-  console.log(`📱 Acesse http://localhost:${PORT} para ver os endpoints`);
-  console.log(`🔗 QR Code: http://localhost:${PORT}/qr`);
+  console.log(`🔗 QR:     http://localhost:${PORT}/qr`);
   console.log(`📊 Status: http://localhost:${PORT}/status`);
-
-  // Inicializar WhatsApp
   initializeWhatsApp();
 });
 
 // Graceful shutdown
 process.on("SIGINT", () => {
   console.log("\n🛑 Encerrando servidor...");
-  if (client) {
-    client.destroy();
-  }
+  if (client) client.destroy();
   process.exit(0);
 });
-
 process.on("SIGTERM", () => {
   console.log("\n🛑 Encerrando servidor...");
-  if (client) {
-    client.destroy();
-  }
+  if (client) client.destroy();
   process.exit(0);
 });
